@@ -127,6 +127,9 @@ class Value:
 
     def __radd__(self, other): # other + self
         return self + other
+    
+    def __rmul__(self, other):
+        return self * other
 
     def backward(self):
         # topological order all of the children in the graph
