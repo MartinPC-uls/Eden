@@ -16,9 +16,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "ops/binaryops.h"
-#include "ops/activationops.h"
-#include "cpu/multithreading.h"
+#include "../ops/binaryops.h"
+#include "../ops/activationops.h"
+#include "../cpu/multithreading.h"
 using namespace std;
 
 /*
@@ -32,37 +32,37 @@ extern "C" {
     }
 
     // -- dtype = float32 --
-    Tensor* tensor_float32(float* data, int data_size, int nthreads, bool requires_grad) {
-        return new Tensor(data, data_size, nthreads, requires_grad);
+    Vector* vector_float32(float* data, int data_size, int nthreads, bool requires_grad) {
+        return new Vector(data, data_size, nthreads, requires_grad);
     }
 
-    Tensor* tensor_float32_init(float* data, int data_size, int nthreads, bool requires_grad) {
+    Vector* vector_float32_init(float* data, int data_size, int nthreads, bool requires_grad) {
         float* new_data = (float*)malloc(data_size * sizeof(float));
 
         fill_float32_array(new_data, data, data_size, nthreads);
-        Tensor* out = new Tensor(new_data, data_size, nthreads, requires_grad);
+        Vector* out = new Vector(new_data, data_size, nthreads, requires_grad);
 
         return out;
     }
 
-    bool get_requires_grad(Tensor* obj) { return obj->requires_grad; }
-    int get_data_size(Tensor* obj) { return obj->data_size; }
-    int get_nthreads(Tensor* obj) { return obj->nthreads; }
+    bool get_requires_grad(Vector* obj) { return obj->requires_grad; }
+    int get_data_size(Vector* obj) { return obj->data_size; }
+    int get_nthreads(Vector* obj) { return obj->nthreads; }
 
-    Tensor* tensor_float32_object(float* data, int data_size) {
+    Vector* vector_float32_object(float* data, int data_size) {
         // Repeated for Python
-        return new Tensor(data, data_size);
+        return new Vector(data, data_size);
     }
 
-    void delete_tensor(Tensor* obj) {
+    void delete_vector(Vector* obj) {
         delete obj;
     }
 
-    const float* get_tensor_data(Tensor* obj) {
+    const float* get_vector_data(Vector* obj) {
         return obj->data;
     }
 
-    const char* print_tensor(Tensor* obj, bool grad, bool is_stack) {
+    const char* print_vector(Vector* obj, bool grad, bool is_stack) {
         int max_char_number_representation = 10;
         int MAXIMUM_SIZE_REPRESENTATION = 1000;
         bool max_reached = false;
@@ -72,21 +72,21 @@ extern "C" {
             max_reached = true;
             data_size = 9 * (max_char_number_representation + 2);
         }
-        int tensor_str_size = 30 + data_size;
+        int vector_str_size = 30 + data_size;
 
-        char* tensor_str = (char*)malloc(tensor_str_size);
-        if (!tensor_str) {
+        char* vector_str = (char*)malloc(vector_str_size);
+        if (!vector_str) {
             return nullptr;
         }
 
-        strcpy(tensor_str, "");
+        strcpy(vector_str, "");
 
         char data_number[max_char_number_representation];
 
         if (!is_stack && !grad) {
-            strcat(tensor_str, "Tensor([");
+            strcat(vector_str, "vector([");
         } else {
-            strcat(tensor_str, "[");
+            strcat(vector_str, "[");
         }
 
         for (int i = 0; i < obj->data_size; i++) {
@@ -95,24 +95,24 @@ extern "C" {
             } else {
                 snprintf(data_number, sizeof(data_number), "%f", obj->grad[i]);
             }
-            strcat(tensor_str, data_number);
+            strcat(vector_str, data_number);
 
             if (i != obj->data_size - 1) {
-                strcat(tensor_str, ", ");
+                strcat(vector_str, ", ");
             }
 
             if (max_reached && i == 2) {
-                strcat(tensor_str, "..., ");
+                strcat(vector_str, "..., ");
                 i = obj->data_size-4;
             }
         }
 
-        strcat(tensor_str, "]");
+        strcat(vector_str, "]");
         if (!is_stack && !grad) {
-            strcat(tensor_str, ")");
+            strcat(vector_str, ")");
         }
 
-        return tensor_str;
+        return vector_str;
     }
     
     void release_int_memory(int* ptr) { free(ptr); }
@@ -120,11 +120,21 @@ extern "C" {
     void release_float64_memory(double* ptr) { free(ptr); }
     void release_char_memory(char* ptr) { free(ptr); }
 
-    float* get_tensor_grad(Tensor* obj) { return obj->grad; }
-    int get_tensor_size(Tensor* obj) { return obj->data_size; }
-    bool get_tensor_requieres_grad(Tensor* obj) { return obj->requires_grad; }
+    float* get_vector_grad(Vector* obj) { return obj->grad; }
+    int get_vector_size(Vector* obj) { return obj->data_size; }
+    bool get_vector_requieres_grad(Vector* obj) { return obj->requires_grad; }
 
-    Tensor* add(Tensor* a, Tensor* b) {
+    float get_one_item(Vector* a) {
+        /*
+            WARNING:
+                This function is not attached to the main graph, if you use it
+                in Python along with 'to_vector()', make sure you don't do
+                any operations afterwards with this.
+        */
+        return a->data[0];
+    }
+
+    Vector* add(Vector* a, Vector* b) {
         int out_size = a->data_size >= b->data_size ? a->data_size : b->data_size;
         float* result = (float*)malloc(out_size * sizeof(float));
 
@@ -136,7 +146,7 @@ extern "C" {
             cpu_paralell(add_float32, a->nthreads, out_size, result, a->data, b->data);
         }
 
-        Tensor* out = new Tensor(result, out_size, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
+        Vector* out = new Vector(result, out_size, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
         if (b->data_size == 1 && a->data_size != 1) {
             (*out)._backward = addition_backward(b, a, out);
         } else {
@@ -146,7 +156,7 @@ extern "C" {
 
     }
 
-    Tensor* sub(Tensor* a, Tensor* b) {
+    Vector* sub(Vector* a, Vector* b) {
         int out_size = a->data_size >= b->data_size ? a->data_size : b->data_size;
         float* result = (float*)malloc(out_size * sizeof(float));
         
@@ -158,7 +168,7 @@ extern "C" {
             cpu_paralell(sub_float32, a->nthreads, out_size, result, a->data, b->data);
         }
 
-        Tensor* out = new Tensor(result, out_size, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
+        Vector* out = new Vector(result, out_size, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
         if (b->data_size == 1 && a->data_size != 1) {
             (*out)._backward = substraction_backward(b, a, out);
         } else {
@@ -167,7 +177,7 @@ extern "C" {
         return out;
     }
 
-    Tensor* mul(Tensor* a, Tensor* b) {
+    Vector* mul(Vector* a, Vector* b) {
         int out_size = a->data_size >= b->data_size ? a->data_size : b->data_size;
         float* result = (float*)malloc(out_size * sizeof(float));
 
@@ -180,7 +190,7 @@ extern "C" {
             cpu_paralell(mul_float32, a->nthreads, out_size, result, a->data, b->data);
         }
 
-        Tensor* out = new Tensor(result, out_size, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
+        Vector* out = new Vector(result, out_size, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
         if (b->data_size == 1 && a->data_size != 1) {
             (*out)._backward = multiplication_backward(b, a, out);
         } else {
@@ -189,17 +199,17 @@ extern "C" {
         return out;
     }
 
-    Tensor* dot(Tensor* a, Tensor* b) {
+    Vector* dot(Vector* a, Vector* b) {
         float* result = (float*)malloc(sizeof(float));
 
         cpu_paralell(dot_float32, a->nthreads, a->data_size, result, a->data, b->data);
 
-        Tensor* out = new Tensor(result, 1, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
+        Vector* out = new Vector(result, 1, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
         (*out)._backward = dot_backward(a, b, out);
         return out;
     }
 
-    Tensor* divv(Tensor* a, Tensor* b) {
+    Vector* divv(Vector* a, Vector* b) {
         int out_size = a->data_size >= b->data_size ? a->data_size : b->data_size;
         float* result = (float*)malloc(out_size * sizeof(float));
         
@@ -211,7 +221,7 @@ extern "C" {
             cpu_paralell(div_float32, a->nthreads, out_size, result, a->data, b->data);
         }
 
-        Tensor* out = new Tensor(result, out_size, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
+        Vector* out = new Vector(result, out_size, a->nthreads, (a->requires_grad || b->requires_grad), {a, b});
         if (b->data_size == 1 && a->data_size != 1) {
             (*out)._backward = division_backward(b, a, out);
         } else {
@@ -220,73 +230,73 @@ extern "C" {
         return out;
     }
 
-    Tensor* poww(Tensor* a, float b) {
+    Vector* poww(Vector* a, float b) {
         float* result = (float*)malloc(a->data_size * sizeof(float));
         
         cpu_paralell(pow_float32, a->nthreads, a->data_size, result, a->data, NULL, b);
 
-        Tensor* out = new Tensor(result, a->data_size, a->nthreads, (a->requires_grad), {a});
+        Vector* out = new Vector(result, a->data_size, a->nthreads, (a->requires_grad), {a});
         (*out)._backward = pow_backward(a, b, out);
         return out;
     }
 
-    Tensor* relu(Tensor* a) {
+    Vector* relu(Vector* a) {
         float* result = (float*)malloc(a->data_size * sizeof(float));
         
         cpu_paralell(relu_float32, a->nthreads, a->data_size, result, a->data, NULL);
 
-        Tensor* out = new Tensor(result, a->data_size, a->nthreads, (a->requires_grad), {a});
+        Vector* out = new Vector(result, a->data_size, a->nthreads, (a->requires_grad), {a});
         (*out)._backward = relu_backward(a, out);
         return out;
     }
 
-    Tensor* sigmoid(Tensor* a) {
+    Vector* sigmoid(Vector* a) {
         float* result = (float*)malloc(a->data_size * sizeof(float));
         
         cpu_paralell(sigmoid_float32, a->nthreads, a->data_size, result, a->data, NULL);
 
-        Tensor* out = new Tensor(result, a->data_size, a->nthreads, (a->requires_grad), {a});
+        Vector* out = new Vector(result, a->data_size, a->nthreads, (a->requires_grad), {a});
         (*out)._backward = sigmoid_backward(a, out);
         return out;
     }
 
-    Tensor* tanhh(Tensor* a) {
+    Vector* tanhh(Vector* a) {
         float* result = (float*)malloc(a->data_size * sizeof(float));
         
         cpu_paralell(tanh_float32, a->nthreads, a->data_size, result, a->data, NULL);
 
-        Tensor* out = new Tensor(result, a->data_size, a->nthreads, (a->requires_grad), {a});
+        Vector* out = new Vector(result, a->data_size, a->nthreads, (a->requires_grad), {a});
         (*out)._backward = tanh_backward(a, out);
         return out;
     }
 
-    Tensor* expp(Tensor* a) {
+    Vector* expp(Vector* a) {
         float* result = (float*)malloc(a->data_size * sizeof(float));
 
         cpu_paralell(exp_float32, a->nthreads, a->data_size, result, a->data, NULL);
 
-        Tensor* out = new Tensor(result, a->data_size, a->nthreads, (a->requires_grad), {a});
+        Vector* out = new Vector(result, a->data_size, a->nthreads, (a->requires_grad), {a});
         (*out)._backward = exp_backward(a, out);
         return out;
     }
 
-    Tensor* full(float data, int size, int nthreads, bool requires_grad) {
+    Vector* full(float data, int size, int nthreads, bool requires_grad) {
         float* result = (float*)malloc(size * sizeof(float));
 
         full_float32_array(result, data, size, nthreads);
 
-        return new Tensor(result, size, nthreads, requires_grad, {});
+        return new Vector(result, size, nthreads, requires_grad, {});
     }
 
-    Tensor* ones(int size, int nthreads, bool requires_grad) {
+    Vector* ones(int size, int nthreads, bool requires_grad) {
         return full(1, size, nthreads, requires_grad);
     }
 
-    Tensor* zeros(int size, int nthreads, bool requires_grad) {
+    Vector* zeros(int size, int nthreads, bool requires_grad) {
         return full(0, size, nthreads, requires_grad);
     }
 
-    Tensor* _random(int size, int seed, int lower_bound, int upper_bound) {
+    Vector* _random(int size, int seed, int lower_bound, int upper_bound) {
         random_device rd;
         mt19937_64 mtrand;
         if (seed == 0) {
@@ -300,10 +310,10 @@ extern "C" {
             data[i] = static_cast<float>((mtrand() % (upper_bound - lower_bound + 1)) + lower_bound);
         }
 
-        return new Tensor(data, size);
+        return new Vector(data, size);
     }
 
-    Tensor* _randn(int size, int seed, float M, float SD, bool spare) {
+    Vector* _randn(int size, int seed, float M, float SD, bool spare, int nthreads, bool requires_grad) {
         // M stands for mean
         // SD stands for Standard Deviation
         random_device rd;
@@ -337,10 +347,10 @@ extern "C" {
             data[i] = val;
         }
 
-        return new Tensor(data, size);
+        return new Vector(data, size, nthreads, requires_grad);
     }
 
-    Tensor* shuffle(Tensor* a, int seed) {
+    Vector* shuffle(Vector* a, int seed) {
         random_device rd;
         mt19937_64 mtrand;
         if (seed == 0) {
@@ -356,11 +366,11 @@ extern "C" {
 
         std::shuffle(shuffled, shuffled + size, mtrand);
 
-        return new Tensor(shuffled, size);
+        return new Vector(shuffled, size);
     }
     
 
-    void backward(Tensor* a) {
+    void backward(Vector* a) {
         a->backward();
     }
 
@@ -369,6 +379,6 @@ extern "C" {
 /* 
     Command to export to .SO:
 
-        clang++ -Ofast -fPIC -shared -o tensor.so tensor.cpp
+        clang++ -Ofast -fPIC -shared -o "../binaries/vector.so" vector.cpp
 
 */

@@ -6,6 +6,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
+#include "../matrix/matrix.h"
 
 using namespace std;
 

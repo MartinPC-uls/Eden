@@ -1,5 +1,5 @@
-#ifndef _TENSOROBJ_H_
-#define _TENSOROBJ_H_
+#ifndef _VECTOROBJ_H_
+#define _VECTOROBJ_H_
 
 #include <iostream>
 #include <list>
@@ -18,11 +18,11 @@
 #include <sstream>
 #include <string.h>
 #include <thread>
-#include "cpu/multithreading.h"
+#include "../cpu/multithreading.h"
 
 using namespace std;
 
-struct Tensor {
+struct Vector {
     private:
         thread thread1;
         int64_t memory_to_int64(const void* memory) {
@@ -42,7 +42,7 @@ struct Tensor {
         function<void()> _backward;
         bool requires_grad;
         float* data;
-        list<Tensor*> prev;
+        list<Vector*> prev;
         float* grad;
         int data_size;
         int nthreads;
@@ -51,7 +51,7 @@ struct Tensor {
         int get_data_size() { return data_size; }
         int get_nthreads() { return nthreads; }
 
-        Tensor(float* _data, int size, int nthreads = 0, bool requires_grad = false, list<Tensor*> children = {}) {
+        Vector(float* _data, int size, int nthreads = 0, bool requires_grad = false, list<Vector*> children = {}) {
             if (nthreads == 0) {
                 this->nthreads = thread::hardware_concurrency()-1;
             } else {
@@ -68,14 +68,14 @@ struct Tensor {
             setHash();
         }
 
-        bool operator==(const Tensor& other) {
+        bool operator==(const Vector& other) {
             if (_hash == other._hash) {
                 return true;
             }
             return false;
         }
 
-        bool operator!=(const Tensor& other) {
+        bool operator!=(const Vector& other) {
             if (_hash != other._hash) {
                 return false;
             }
@@ -86,19 +86,19 @@ struct Tensor {
             for (int i = 0; i < data_size; i++) {
                 this->grad[i] = 1;
             }
-            list<Tensor*> topo = topological_sort();
+            list<Vector*> topo = topological_sort();
 
-            for (Tensor* v : topo) {
+            for (Vector* v : topo) {
                 if (!(*v).prev.empty()) {
                     (*v)._backward();
                 }
             }
         }
 
-        void topological_sort_util(stack<Tensor*>& sorted_stack, list<Tensor*>& visited) {
+        void topological_sort_util(stack<Vector*>& sorted_stack, list<Vector*>& visited) {
             visited.push_back(this);
 
-            for (Tensor* child : prev) {
+            for (Vector* child : prev) {
                 if (find(visited.begin(), visited.end(), child) == visited.end() && child->requires_grad) {
                     child->topological_sort_util(sorted_stack, visited);
                 }
@@ -107,13 +107,13 @@ struct Tensor {
             sorted_stack.push(this);
         }
 
-        list<Tensor*> topological_sort() {
-            stack<Tensor*> sorted_stack;
-            list<Tensor*> visited;
+        list<Vector*> topological_sort() {
+            stack<Vector*> sorted_stack;
+            list<Vector*> visited;
 
             topological_sort_util(sorted_stack, visited);
 
-            list<Tensor*> order;
+            list<Vector*> order;
             while (!sorted_stack.empty()) {
                 order.push_back(sorted_stack.top());
                 sorted_stack.pop();
@@ -122,7 +122,7 @@ struct Tensor {
             return order;
         }
 
-        ~Tensor() {
+        ~Vector() {
             //delete[] data;
             //delete[] grad;
         }
